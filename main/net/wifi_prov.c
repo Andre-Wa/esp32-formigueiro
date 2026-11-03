@@ -328,7 +328,12 @@ static void provision_on(void)
     esp_wifi_start();
     portal_start();
     set_state(WIFI_AP_PORTAL);
-    toast("Portal WiFi aberto no celular.");
+    {
+        char t[96];
+        snprintf(t, sizeof(t), "Portal: %s / senha %s / 192.168.4.1",
+                 s_ap_ssid, WIFI_AP_PASS);
+        toast(t);
+    }
 }
 
 static void station_start(void)

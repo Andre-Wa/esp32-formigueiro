@@ -1,5 +1,13 @@
 # Changelog — Formigueiro (CYD)
 
+## 0.3.2 — 2026-11-03
+
+- **Credenciais do portal na tela**: enquanto o portal WiFi está aberto, a tela
+  de Configurações mostra um painel com `rede: Formigueiro-XXXX`,
+  `senha: formiga123` e `192.168.4.1` (antes isso só existia no README/docs e
+  em uma mensagem curta do ticker).
+- Toast de abertura do portal agora fala rede + senha + endereço completos.
+
 ## 0.3.1 — 2026-11-03
 
 **Build (correção de loop de reconfigure do CMake/ninja)**

@@ -141,6 +141,19 @@ static void settings_draw(gfx_canvas_t *c)
             gtext_fit(c, 6, y + 14, LCD_H_RES - 12, g_col.events[idx], COL_UI_MUTED, 1);
         }
     }
+    /* -------- portal aberto: credenciais VISÍVEIS na tela -------- */
+    if (net_state() == WIFI_AP_PORTAL) {
+        gfx_tint(c, 0, 0, LCD_H_RES, LCD_V_RES, 60, COL_UI_BG);
+        gfx_fill_round_rect(c, 24, 62, 272, 96, 8, COL_UI_PANEL);
+        gfx_round_rect(c, 24, 62, 272, 96, 8, COL_UI_ACCENT);
+        gtext(c, 36, 70, "Portal WiFi aberto:", COL_UI_ACCENT, 1);
+        gtext(c, 36, 86, "rede:  ", COL_UI_MUTED, 1);
+        gtext(c, 76, 86, wifi_ap_ssid(), COL_UI_TEXT, 1);
+        gtext(c, 36, 100, "senha: ", COL_UI_MUTED, 1);
+        gtext(c, 92, 100, WIFI_AP_PASS, COL_UI_OK, 1);
+        gtext(c, 36, 114, "no celular: 192.168.4.1", COL_UI_TEXT, 1);
+        gtext(c, 36, 132, "(linha WIFI fecha o portal)", COL_UI_MUTED, 1);
+    }
     ui_draw_toast(c);
 
     /* -------- teclado da cidade -------- */
