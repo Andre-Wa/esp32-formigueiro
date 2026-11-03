@@ -1,5 +1,45 @@
 # Changelog — Formigueiro (CYD)
 
+## 0.3.0 — 2026-11-03
+
+**WiFi/portal**
+- Crash corrigido: 2º toque em Configurações → WIFI recriava o netif AP
+  (`assert ... duplicate key` em `esp_netif_create_default_wifi_ap`). Agora o
+  netif é único e `provision_off()` derruba o portal corretamente.
+- WIFI virou **toggle** (abre/fecha o portal) e, **sem credenciais, o portal
+  abre sozinho no boot**.
+- **Captive portal DNS** (porta 53): o celular abre 192.168.4.1 sozinho.
+
+**Brilho**
+- Botões − / + reais (zonas de toque = glifos desenhados), passo 10, limites
+  10–100, sem o ciclo `% 101` que "reiniciava" o valor.
+- **AUTO**: brilho pelo sensor de luz (LDR GPIO34/ADC1_CH6), novo módulo
+  `hw/ldr.c`, tecla AUTO na linha BRILHO.
+
+**Jogo**
+- Formigas não atravessam mais paredes: `CORR` (render) agora tem as mesmas
+  12 arestas do `ADJ` (simulação).
+- Flip dos sprites corrigido (a arte base olha p/ esquerda; antes andavam
+  "de costas" para o lado certo).
+- Exterior: **arrastar move a câmera** (1:1, com pausa de ~20 s no auto-seguir).
+- **Aranha tem vida**: operárias próximas revidam; derrota = +25 comida e ela
+  some por ~2 dias de jogo. Toque nela mostra a vida.
+- **Obras confiáveis**: AMPLIAR cobra o custo (30/60) na partida, operárias
+  escavam na própria câmara, nível sobe ao concluir (sem progresso escondido
+  no `water` do átrio).
+- Energia cai ~2× mais devagar; **EQUIPE FORA** limita operárias na rua
+  (2/3/4/6/todas) — controle de grupo.
+- **Jardim de fungos com função clara**: rende `2·nível +umidade +chuva` a
+  cada 2 h; operárias podem umedecê-lo (nó 2); tocar mostra produção/umidade.
+- Tocar nas câmaras mostra info útil (estoques, ninhada, humor da rainha,
+  higiene) em vez de só o nome.
+
+**Docs**: `docs/ARQUITETURA.md`, `docs/JOGO.md`, `docs/REDE.md` (inclui o plano
+da PWA + BLE para a v0.4.0).
+
+Obs.: o tamanho de `app_config_t` mudou (`bright_auto`) → configurações voltam
+aos padrões uma vez após atualizar (o save da colônia NÃO é afetado).
+
 ## 0.2.0 — 2026-11-03
 
 **Correção crítica: touch morto na tela do jogo + task watchdog em loop.**

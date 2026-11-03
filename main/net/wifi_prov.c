@@ -25,6 +25,7 @@
 #include "esp_crt_bundle.h"
 #include "esp_sntp.h"
 #include "esp_timer.h"
+#include "lwip/sockets.h"
 #include "cJSON.h"
 
 #include "app_config.h"
@@ -221,6 +222,46 @@ static esp_err_t handler_cfg(httpd_req_t *req)
     return ESP_OK;
 }
 
+/* ------- captive portal: DNS responde TUDO com 192.168.4.1 -------
+     * Assim o celular/PC abre o portal sozinho ao conectar no AP. */
+static volatile bool s_dns_on = false;
+
+static void dns_captive_task(void *arg)
+{
+    (void)arg;
+    int fd = lwip_socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (fd < 0) { vTaskDelete(NULL); return; }
+    struct sockaddr_in sa = { 0 };
+    sa.sin_family = AF_INET;
+    sa.sin_port = htons(53);
+    sa.sin_addr.s_addr = htonl(INADDR_ANY);
+    if (lwip_bind(fd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
+        lwip_close(fd); vTaskDelete(NULL); return;
+    }
+    struct timeval tv = { .tv_sec = 0, .tv_usec = 200000 };
+    lwip_setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+    uint8_t q[300], r[340];
+    while (s_dns_on) {
+        int n = lwip_recv(fd, q, sizeof(q), 0);
+        if (n < 12 || n > (int)sizeof(q) - 20) continue;
+        memcpy(r, q, (size_t)n);
+        r[2] |= 0x80;                    /* QR: resposta */
+        r[3] |= 0x80;                    /* RA */
+        r[6] = 0; r[7] = 1;              /* ANCOUNT = 1 */
+        int o = n;
+        r[o++] = 0xC0; r[o++] = 0x0C;    /* nome = ponteiro p/ pergunta */
+        r[o++] = 0x00; r[o++] = 0x01;    /* tipo A */
+        r[o++] = 0x00; r[o++] = 0x01;    /* classe IN */
+        r[o++] = 0x00; r[o++] = 0x00; r[o++] = 0x00; r[o++] = 60;  /* TTL */
+        r[o++] = 0x00; r[o++] = 0x04;    /* rdlength */
+        r[o++] = 192; r[o++] = 168; r[o++] = 4; r[o++] = 1;
+        lwip_send(fd, r, o, 0);
+    }
+    lwip_close(fd);
+    vTaskDelete(NULL);
+}
+
 static void portal_start(void)
 {
     if (s_httpd) return;
@@ -238,14 +279,34 @@ static void portal_start(void)
     httpd_register_uri_handler(s_httpd, &u2);
     httpd_register_uri_handler(s_httpd, &u3);
     ESP_LOGI(TAG, "portal web ativo em http://192.168.4.1");
+    if (!s_dns_on) {
+        s_dns_on = true;
+        xTaskCreate(dns_captive_task, "cpdns", 2560, NULL, 3, NULL);
+    }
 }
 
 static void portal_stop(void)
 {
+    s_dns_on = false;
     if (s_httpd) {
         httpd_stop(s_httpd);
         s_httpd = NULL;
     }
+}
+
+static void station_start(void);   /* fwd */
+
+static void provision_off(void)
+{
+    portal_stop();
+    esp_wifi_stop();
+    if (s_ap_netif) {
+        esp_netif_destroy(s_ap_netif);
+        s_ap_netif = NULL;
+    }
+    if (appcfg_get()->wifi_ssid[0]) station_start();
+    else set_state(WIFI_OFF);
+    toast("Portal WiFi fechado.");
 }
 
 void net_start_provision(void) { s_prov_req = true; }
@@ -253,7 +314,7 @@ void net_start_provision(void) { s_prov_req = true; }
 static void provision_on(void)
 {
     esp_wifi_stop();
-    s_ap_netif = esp_netif_create_default_wifi_ap();
+    if (!s_ap_netif) s_ap_netif = esp_netif_create_default_wifi_ap();
 
     wifi_config_t wc = { 0 };
     strlcpy((char *)wc.ap.ssid, s_ap_ssid, sizeof(wc.ap.ssid));
@@ -438,19 +499,28 @@ static void do_weather(void)
 }
 
 /* ============================ tarefa ====================================== */
+static bool s_boot_done = false;
+
 static void net_task(void *arg)
 {
     int64_t last_ms = 0;
     while (true) {
         int64_t now = now_ms();
 
+        if (!s_boot_done) {
+            s_boot_done = true;
+            if (!appcfg_get()->wifi_ssid[0]) {
+                ESP_LOGI(TAG, "sem WiFi configurado - abrindo portal automaticamente");
+                provision_on();
+            } else {
+                station_start();
+            }
+        }
         if (s_prov_req) {
             s_prov_req = false;
-            if (s_state == WIFI_ONLINE) {
-                toast("WiFi ja esta conectado.");
-            } else {
-                provision_on();
-            }
+            if (s_state == WIFI_ONLINE)      toast("WiFi ja esta conectado.");
+            else if (s_state == WIFI_AP_PORTAL) provision_off();
+            else                             provision_on();
         }
         if (s_apply_cred) {
             s_apply_cred = false;

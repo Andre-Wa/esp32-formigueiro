@@ -24,6 +24,7 @@
 enum {
     ROW_SPEED = 0,
     ROW_BRIGHT,
+    ROW_TEAM,
     ROW_WIFI,
     ROW_CITY,
     ROW_WEATHER,
@@ -76,8 +77,24 @@ static void settings_draw(gfx_canvas_t *c)
              g_col.speed == 2 ? "rapida (x2)" : "turbo (x4)");
     draw_row(c, ROW_SPEED, "VELOCIDADE", v, COL_UI_TEXT);
 
-    snprintf(v, sizeof(v), "%u%%  [-]  [+]", cfg->brightness);
+    snprintf(v, sizeof(v), "%s%u%%", cfg->bright_auto ? "auto " : "", cfg->brightness);
     draw_row(c, ROW_BRIGHT, "BRILHO", v, COL_UI_TEXT);
+    {   /* botões reais, nas mesmas zonas do toque */
+        int yb = ROW_Y0 + ROW_BRIGHT * ROW_H;
+        gfx_fill_round_rect(c, 196, yb + 3, 36, ROW_H - 6, 4, COL_UI_PANEL2);
+        gfx_fill_round_rect(c, 236, yb + 3, 36, ROW_H - 6, 4, COL_UI_PANEL2);
+        gfx_fill_round_rect(c, 276, yb + 3, 40, ROW_H - 6, 4,
+                            cfg->bright_auto ? COL_UI_OK : COL_UI_PANEL2);
+        gtext(c, 206, yb + 4, "-", COL_UI_TEXT, 1);
+        gtext(c, 246, yb + 4, "+", COL_UI_TEXT, 1);
+        gtext(c, 280, yb + 4, "AUTO", cfg->bright_auto ? COL_UI_BG : COL_UI_MUTED, 1);
+    }
+
+    {
+        int cap = colony_get_forage_cap();
+        snprintf(v, sizeof(v), cap >= 20 ? "todas" : "%d formigas", cap);
+        draw_row(c, ROW_TEAM, "EQUIPE FORA", v, COL_UI_TEXT);
+    }
 
     switch (net_state()) {
     case WIFI_ONLINE:
@@ -217,18 +234,40 @@ static void settings_touch(const touch_evt_t *ev)
     }
     case ROW_BRIGHT: {
         int b = cfg->brightness;
-        if (ev->x > 240) b += 15; else if (ev->x > 200) b -= 15; else b = (b + 25) % 101;
-        if (b < 10) b = 10;
-        if (b > 100) b = 100;
-        app_send_cmd(CMD_SET_BRIGHTNESS, b);
+        if (ev->x >= 276) {
+            cfg->bright_auto = !cfg->bright_auto;
+            appcfg_save();
+            colony_msg("Brilho automatico %s (sensor de luz).",
+                       cfg->bright_auto ? "ligado" : "desligado");
+        } else if (ev->x >= 236) {
+            cfg->bright_auto = 0;
+            b += 10; if (b > 100) b = 100;
+            app_send_cmd(CMD_SET_BRIGHTNESS, b);
+        } else if (ev->x >= 196) {
+            cfg->bright_auto = 0;
+            b -= 10; if (b < 10) b = 10;
+            app_send_cmd(CMD_SET_BRIGHTNESS, b);
+        }
+        break;
+    }
+    case ROW_TEAM: {
+        int n = colony_get_forage_cap();
+        int nx = n < 3 ? 3 : n < 4 ? 4 : n < 6 ? 6 : n < 20 ? 20 : 2;
+        colony_set_forage_cap(nx);
+        colony_msg(nx >= 20 ? "Equipe externa: todas as operarias."
+                            : "Equipe externa: %d formigas por vez.", nx);
         break;
     }
     case ROW_WIFI:
         if (net_state() == WIFI_ONLINE) {
-            colony_msg("WiFi ja conectado.");
+            colony_msg("WiFi ja conectado (%s).", cfg->wifi_ssid);
+        } else if (net_state() == WIFI_AP_PORTAL) {
+            app_send_cmd(CMD_START_PROVISION, 0);      /* toggle: fecha o portal */
+            colony_msg("Fechando portal WiFi...");
         } else {
             app_send_cmd(CMD_START_PROVISION, 0);
-            colony_msg("Portal WiFi abrindo...");
+            colony_msg("Portal: conecte em %s / formiga123 e abra 192.168.4.1",
+                       wifi_ap_ssid());
         }
         break;
     case ROW_CITY:

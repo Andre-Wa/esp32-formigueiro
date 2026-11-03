@@ -35,7 +35,8 @@ typedef struct {
     /* jogo */
     uint8_t  speed;              /* 0=pausa 1=normal 2=rapido 4=turbo */
     uint8_t  sound;              /* reservado (módulo de áudio futuro) */
-    uint8_t  led_mode;           /* 0=estado da colonia 1=off */
+    uint8_t  led_mode;
+    uint8_t bright_auto;      /* 1 = brilho pelo sensor de luz (LDR) */           /* 0=estado da colonia 1=off */
     int32_t  clock_offset_s;     /* correção manual de hora (sem NTP) */
 } app_config_t;
 

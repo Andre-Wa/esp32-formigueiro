@@ -293,6 +293,12 @@ void colony_save_now(void);
  * Chamado quando o NTP acerta o relógio pela primeira vez. */
 void colony_offline(uint32_t seconds);
 
+/* controles de sessão (v0.3.0) */
+void colony_set_forage_cap(int n);   /* teto de operárias no exterior (1..20) */
+int  colony_get_forage_cap(void);
+int  colony_spider_hp(void);         /* -1 = derrotada/ausente */
+void colony_cam_pan(int dx);         /* panorâmica manual no exterior */
+
 /* ---------------- utilidades ---------------- */
 colony_phase_t colony_phase(void);
 uint8_t  colony_hour(void);

@@ -120,9 +120,10 @@ static void soil_texture(gfx_canvas_t *c, int x, int y, int w, int h)
 
 /* ============================ interior ==================================== */
 typedef struct { int a, b, t; } corridor_t;
-static const corridor_t CORR[] = {
+static const corridor_t CORR[] = {   /* MESMAS arestas do ADJ em colony.c */
     { 7, 0, 12 }, { 0, 5, 12 }, { 5, 1, 12 }, { 5, 2, 12 }, { 5, 6, 9 },
     { 1, 3, 12 }, { 3, 4, 12 }, { 2, 4, 12 }, { 6, 2, 9 },
+    { 3, 5, 10 }, { 4, 5, 10 }, { 1, 4, 9 },
 };
 
 static bool worker_outside(const worker_t *w)
@@ -140,7 +141,7 @@ static void draw_worker(gfx_canvas_t *c, const worker_t *w, int i)
 {
     int x = UNQ8(w->x), y = SY(UNQ8(w->y));
     sprite_id_t id;
-    bool flip = w->face < 0;
+    bool flip = w->face >= 0;   /* arte base olha p/ esquerda */
     if (w->state == W_SLEEP) id = SPR_ANT_SLEEP;
     else if (w->state == W_EAT) id = SPR_ANT_EAT;
     else if (w->carry) id = SPR_ANT_CARRY_R;
@@ -174,7 +175,7 @@ static void draw_queen(gfx_canvas_t *c)
     const queen_t *q = &g_col.queen;
     int x = UNQ8(q->x), y = SY(UNQ8(q->y));
     sprite_id_t id;
-    bool flip = q->face < 0;
+    bool flip = q->face >= 0;   /* arte base olha p/ esquerda */
     switch (q->state) {
     case Q_SLEEP: id = SPR_QUEEN_SLEEP; break;
     case Q_PET:
@@ -414,13 +415,15 @@ void render_outside(gfx_canvas_t *c)
 
     /* aranha + fio */
     {
-        int sx = g_col.spider_x - cam;
-        if (sx > -20 && sx < VIEW_W + 20) {
-            gfx_vline(c, sx + 9, VIEW_Y, SY(g_col.spider_y) - VIEW_Y - 4, COL_UI_MUTED);
-            spr_draw(c, SPR_SPIDER, sx - 9, SY(g_col.spider_y) - 6);
-            if ((g_col.total_ticks / 10) & 1) {
-                gfx_pixel(c, sx + 4, SY(g_col.spider_y) - 2, COL_DANGER);
-                gfx_pixel(c, sx + 14, SY(g_col.spider_y) - 2, COL_DANGER);
+        if (g_col.spider_x >= 0) {
+            int sx = g_col.spider_x - cam;
+            if (sx > -20 && sx < VIEW_W + 20) {
+                gfx_vline(c, sx + 9, VIEW_Y, SY(g_col.spider_y) - VIEW_Y - 4, COL_UI_MUTED);
+                spr_draw(c, SPR_SPIDER, sx - 9, SY(g_col.spider_y) - 6);
+                if ((g_col.total_ticks / 10) & 1) {
+                    gfx_pixel(c, sx + 4, SY(g_col.spider_y) - 2, COL_DANGER);
+                    gfx_pixel(c, sx + 14, SY(g_col.spider_y) - 2, COL_DANGER);
+        }
             }
         }
     }
@@ -431,7 +434,7 @@ void render_outside(gfx_canvas_t *c)
         if (!w->alive || !worker_outside(w)) continue;
         int x = UNQ8(w->x) - cam, y = SY(UNQ8(w->y));
         sprite_id_t id;
-        bool flip = w->face < 0;
+        bool flip = w->face >= 0;   /* arte base olha p/ esquerda */
         if (w->carry) id = SPR_ANT_CARRY_R;
         else if (w->state == W_HUNT) id = ((g_col.total_ticks / 4) & 1) ? SPR_ANT_WALK_R : SPR_ANT_WALK2_R;
         else id = ((g_col.total_ticks / 6 + (uint32_t)i) & 1) ? SPR_ANT_WALK_R : SPR_ANT_WALK2_R;

@@ -62,6 +62,11 @@
 
 #define TOUCH_ADC_MAX       4096            /* 12 bits */
 #define TOUCH_Z_THRESHOLD   600             /* pressão mínima (placa CYD) */
+
+/* Sensor de luz (LDR) do CYD: GPIO34 = ADC1_CH6 */
+#define LDR_GPIO            34
+#define LDR_ADC_CHAN        6               /* ADC1_CHANNEL_6 */
+#define LDR_INVERT          0               /* 1 se o seu painel ler ao contrário */
 #define TOUCH_SAMPLES_AVG   3
 
 /* Mapeamento padrão bruto -> tela (paisagem, MADCTL 0x28).
@@ -109,7 +114,7 @@
 
 /* ===================== Aplicação ========================================== */
 #define APP_NAME            "Formigueiro"
-#define APP_VERSION         "0.2.0"
+#define APP_VERSION         "0.3.0"
 
 /* Força o fluxo de orientação + calibração de touch em TODO boot (debug). */
 #define DEBUG_CALIB_EVERY_BOOT 0

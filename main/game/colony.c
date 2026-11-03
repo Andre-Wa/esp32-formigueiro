@@ -30,6 +30,7 @@ static const char *TAG = "colony";
 colony_t g_col;
 
 /* flags de intenção das operárias */
+#define F_BUILD  0x08     /* indo executar a obra na câmara selecionada */
 #define F_LEAVE  0x10     /* ao chegar no nó 0, sai para o exterior */
 #define F_FREE   0x20     /* andando livre dentro da câmara */
 #define F_EAT    0x40     /* indo comer na despensa */
@@ -52,6 +53,14 @@ static const uint8_t ADJ[12][2] = {
 #define ADJ_N ((int)(sizeof(ADJ) / sizeof(ADJ[0])))
 
 static uint8_t s_dist[COLONY_MAX_NODES][COLONY_MAX_NODES];
+
+/* estado de sessão (não vai no save): vida da aranha, obra em andamento,
+ * teto da equipe externa e prioridade manual da câmera */
+static uint8_t  s_spider_hp    = 100;
+static uint32_t s_spider_back_at = 0;
+static int8_t   s_build_ci     = -1;
+static uint8_t  s_forage_cap   = 3;
+static uint16_t s_cam_hold     = 0;
 
 static void build_dist(void)
 {
@@ -661,7 +670,7 @@ static void on_hour(void)
         if (i >= 0) {
             chamber_t *f = &c->chambers[i];
             if (f->water > 4) f->water = (uint8_t)(f->water - 4);
-            int prod = f->level + (f->water > 30 ? 1 : 0) + (colony_raining() ? 1 : 0);
+            int prod = 2 * f->level + (f->water > 30 ? 1 : 0) + (colony_raining() ? 1 : 0);
             if (c->weather == WX_SUN && f->water < 10) prod = 0;
             if (prod > 0 && chance(70)) {
                 add_food(prod);
@@ -747,8 +756,14 @@ static void on_hour(void)
         c->weather_age_min = (uint16_t)(c->weather_age_min + 60);
     }
 
-    /* ---- aranha ---- */
-    if (chance(30)) {
+    /* ---- aranha (derrotável; volta depois de ~2 dias) ---- */
+    if (c->spider_x < 0) {
+        if (s_spider_back_at && c->total_ticks >= s_spider_back_at) {
+            c->spider_x = 520; c->spider_y = 104; c->spider_dir = -1;
+            s_spider_hp = 100; s_spider_back_at = 0;
+            colony_msg("Uma aranha voltou a rondar o jardim...");
+        }
+    } else if (chance(30)) {
         c->spider_x = (int16_t)clampi(c->spider_x + c->spider_dir * rnd_range(2, 8), 470, 620);
         if (c->spider_x <= 470 || c->spider_x >= 620) c->spider_dir = (int8_t)-c->spider_dir;
     }
@@ -774,6 +789,28 @@ static void on_hour(void)
 static void worker_on_node(worker_t *w);
 
 /* decide a próxima tarefa conforme a fase do dia / necessidades */
+static bool worker_state_is_outside(uint8_t st);   /* fwd decl */
+
+static int count_outside(void)
+{
+    int n = 0;
+    for (int i = 0; i < g_col.n_workers; i++)
+        if (g_col.workers[i].alive && worker_state_is_outside(g_col.workers[i].state)) n++;
+    return n;
+}
+
+/* sair para o exterior respeitando o teto da equipe */
+static bool try_leave(worker_t *w)
+{
+    if (count_outside() >= s_forage_cap) {
+        set_path(w, colony_rand_range(2) ? 6 : 3);   /* equipe cheia: fica dentro */
+        return false;
+    }
+    set_path(w, 0);
+    w->flags = F_LEAVE;
+    return true;
+}
+
 static void worker_decide(worker_t *w)
 {
     colony_t *c = &g_col;
@@ -800,16 +837,16 @@ static void worker_decide(worker_t *w)
     case PHASE_DAWN:
         if (r < 35)      set_path(w, 4);
         else if (r < 60) set_path(w, 3);
-        else             { set_path(w, 0); w->flags = F_LEAVE; }
+        else             try_leave(w);
         break;
     case PHASE_DAY:
-        if (r < 65)      { set_path(w, 0); w->flags = F_LEAVE; }
+        if (r < 65)      try_leave(w);
         else if (r < 80) set_path(w, 6);
         else if (r < 92) set_path(w, 3);
         else             set_path(w, 4);
         break;
     case PHASE_AFTERNOON:
-        if (r < 35)      { set_path(w, 0); w->flags = F_LEAVE; }
+        if (r < 35)      try_leave(w);
         else if (r < 65) set_path(w, 6);
         else if (r < 85) set_path(w, 3);
         else             set_path(w, 4);
@@ -856,9 +893,13 @@ static void worker_on_node(worker_t *w)
         else { w->state = W_IDLE; w->timer = 40; }
         return;
     }
+    if (w->flags & F_BUILD) { w->flags &= (uint8_t)~F_BUILD; w->state = W_BUILD; w->timer = 90; return; }
     if (w->flags & F_LEAVE) { w->flags &= (uint8_t)~F_LEAVE; w->state = W_EXIT; return; }
 
     switch (w->node_to) {
+    case 2:                                     /* jardim de fungos: umedecer */
+        w->state = W_TEND; w->timer = (uint16_t)rnd_range(100, 200);
+        break;
     case 3:                                     /* berçário */
         if (c->eggs + c->larvae + c->pupae > 0) { w->state = W_TEND; w->timer = (uint16_t)rnd_range(120, 260); }
         else { w->state = W_IDLE; w->timer = 60; }
@@ -867,12 +908,8 @@ static void worker_on_node(worker_t *w)
         w->state = W_TEND_QUEEN;
         w->timer = (uint16_t)rnd_range(80, 160);
         break;
-    case 6:                                     /* lixeira: obra ou faxina */
-        if (c->sel_chamber && colony_build_cost(c->sel_chamber - 1) && c->material >= 2) {
-            w->state = W_BUILD; w->timer = 90;
-        } else {
-            w->state = W_CLEAN; w->timer = (uint16_t)rnd_range(80, 160);
-        }
+    case 6:                                     /* lixeira: faxina */
+        w->state = W_CLEAN; w->timer = (uint16_t)rnd_range(80, 160);
         break;
     default:
         w->state = W_IDLE;
@@ -902,14 +939,35 @@ static void worker_update(worker_t *w, int idx)
     /* relógio vital escalonado */
     if ((c->total_ticks % 20) == (uint32_t)(idx % 20)) {
         if (w->state == W_SLEEP) {
-            w->energy = (uint8_t)clampi(w->energy + 6, 0, 100);
+            w->energy = (uint8_t)clampi(w->energy + 5, 0, 100);
             w->hunger = (uint8_t)clampi(w->hunger + 1, 0, 100);
         } else {
-            w->energy = (uint8_t)clampi(w->energy - 2, 0, 100);
-            w->hunger = (uint8_t)clampi(w->hunger + 2, 0, 100);
+            w->energy = (uint8_t)clampi(w->energy - 1, 0, 100);
+            w->hunger = (uint8_t)clampi(w->hunger + 1, 0, 100);
         }
         if (w->health < 100 && w->energy > 40 && w->hunger < 60) w->health++;
         if (w->health <= 0) { worker_die(w, "nao resistiu..."); return; }
+    }
+
+    /* contra-ataque: operárias perto da aranha revidam (ela TEM vida) */
+    if (c->spider_x >= 0 && (c->total_ticks % 10) == (uint32_t)(idx % 10) &&
+        (w->state == W_HUNT || w->state == W_GO_RES || w->state == W_SCOUT ||
+         w->state == W_FLEE)) {
+        int dx = c->spider_x - UNQ8(w->x), dy = c->spider_y - UNQ8(w->y);
+        if (dx * dx + dy * dy < 30 * 30) {
+            s_spider_hp = (uint8_t)(s_spider_hp > 3 ? s_spider_hp - 3 : 0);
+            if ((c->total_ticks % 30) == 0)
+                colony_fx_spark(FX(c->spider_x - c->cam_x, c->spider_y - 8), COL_UI_WARN);
+            if (!s_spider_hp) {
+                c->spider_x = -1;
+                s_spider_back_at = c->total_ticks + 2u * 96000u;   /* ~2 dias de jogo */
+                add_food(25);
+                c->points = (uint16_t)clampi(c->points + 60, 0, 65000);
+                c->flash_ticks = 30;
+                c->alarm = 0;
+                colony_msg("As formigas venceram a aranha! +25 comida.");
+            }
+        }
     }
 
     switch (w->state) {
@@ -971,6 +1029,11 @@ static void worker_update(worker_t *w, int idx)
                 }
             } else if (w->state == W_CLEAN) {
                 c->hygiene = (uint8_t)clampi(c->hygiene + 6, 0, 100);
+            } else if (w->node_to == 2) {
+                int fi = ch_index(CH_FUNGUS);
+                if (fi >= 0)
+                    c->chambers[fi].water = (uint8_t)clampi(c->chambers[fi].water + 10, 0, 100);
+                if (chance(25)) colony_msg("Operaria umedeceu o jardim de fungos.");
             }
             c->tasks_done++;
             w->state = W_IDLE;
@@ -982,29 +1045,18 @@ static void worker_update(worker_t *w, int idx)
         if ((c->total_ticks % 8) == 0) colony_fx_dirt(FX(UNQ8(w->x) + rnd_range(-4, 4), UNQ8(w->y) + 4));
         if (w->timer) w->timer--;
         else {
-            int ci = c->sel_chamber ? c->sel_chamber - 1 : -1;
-            uint8_t cost = colony_build_cost(ci);
-            int ai = ch_index(CH_ATRIUM);
-            if (!cost || ci < 0 || ai < 0) { w->state = W_IDLE; w->timer = 40; break; }
-            if (c->material >= 2) {
-                c->material -= 2;
+            int ci = s_build_ci;
+            if (ci >= 0 && ci < c->n_chambers && colony_build_cost(ci)) {
+                c->chambers[ci].level++;
                 c->chambers[ci].dirty = 0;
-                /* progresso da obra acumulado no campo `water` do átrio */
-                c->chambers[ai].water = (uint8_t)clampi(c->chambers[ai].water + 12, 0, 100);
+                c->points = (uint16_t)clampi(c->points + 40, 0, 65000);
+                c->flash_ticks = 30;
                 c->tasks_done++;
-                if (c->chambers[ai].water >= 100) {
-                    c->chambers[ai].water = 0;
-                    c->chambers[ci].level++;
-                    c->points = (uint16_t)clampi(c->points + 40, 0, 65000);
-                    c->flash_ticks = 30;
-                    c->sel_chamber = 0;
-                    colony_msg("%s ampliada para nivel %d!",
-                               colony_chamber_name(ci), c->chambers[ci].level);
-                    colony_event("Obra concluida. Novos limites ativos.");
-                }
-            } else {
-                colony_msg("Sem material para a obra.");
+                colony_msg("%s ampliada para nivel %d!",
+                           colony_chamber_name(ci), c->chambers[ci].level);
+                colony_event("Obra concluida. Novos limites ativos.");
             }
+            s_build_ci = -1;      /* 1ª operária a concluir fecha a obra */
             w->state = W_IDLE;
             w->timer = 30;
         }
@@ -1050,7 +1102,7 @@ static void worker_update(worker_t *w, int idx)
         w->tx = c->res[ri].x; w->ty = c->res[ri].y;
 
         int dx = c->spider_x - UNQ8(w->x), dy = c->spider_y - UNQ8(w->y);
-        if (dx * dx + dy * dy < 38 * 38 && chance(30)) {
+        if (dx * dx + dy * dy < 38 * 38 && !w->hurt && chance(20)) {
             w->health = (uint8_t)clampi(w->health - 25, 0, 100);
             w->hurt = 1;
             c->alarm = 2;
@@ -1416,25 +1468,47 @@ static void do_hunt(void)
     c->points = (uint16_t)clampi(c->points + 5, 0, 65000);
 }
 
+static uint8_t ch_node(uint8_t kind)
+{
+    switch (kind) {
+    case CH_STORAGE: return 1;
+    case CH_FUNGUS:  return 2;
+    case CH_NURSERY: return 3;
+    case CH_ROYAL:   return 4;
+    case CH_TRASH:   return 6;
+    default:         return 5;      /* CH_ATRIUM */
+    }
+}
+
 static void do_build(void)
 {
     colony_t *c = &g_col;
     int ci = c->sel_chamber ? c->sel_chamber - 1 : -1;
     if (ci < 0) { colony_msg("Toque numa camara primeiro para ampliar."); return; }
+    if (s_build_ci >= 0) {
+        colony_msg("Obra ja em andamento no(a) %s.", colony_chamber_name((int)s_build_ci));
+        return;
+    }
     uint8_t cost = colony_build_cost(ci);
     if (!cost) { colony_msg("%s ja esta no nivel maximo.", colony_chamber_name(ci)); return; }
-    if (c->material < 10) { colony_msg("Precisa de material (custo da obra: %u).", cost); return; }
-
+    if (c->material < cost) {
+        colony_msg("Falta material: custo %u, tem %d. Colete gravetos/pedras la fora.",
+                   cost, c->material);
+        return;
+    }
     int sent = 0;
     for (int i = 0; i < c->n_workers && sent < 2; i++) {
         worker_t *w = &c->workers[i];
         if (!w->alive || worker_busy(w)) continue;
-        w->flags = 0;
-        set_path(w, 6);
+        w->flags = F_BUILD;
+        set_path(w, ch_node(c->chambers[ci].kind));
         sent++;
     }
     if (!sent) { colony_msg("Sem operarias livres para a obra."); return; }
-    colony_msg("Obra no(a) %s iniciada (custo %u).", colony_chamber_name(ci), cost);
+    c->material = (int16_t)(c->material - cost);
+    s_build_ci = (int8_t)ci;
+    colony_msg("Obra no(a) %s: %d operarias a caminho (-%u material).",
+               colony_chamber_name(ci), sent, cost);
 }
 
 static void do_tend(void)
@@ -1521,9 +1595,34 @@ void colony_command(const app_cmd_t *cmd)
             c->sel_worker = 0;
             chamber_t *ch = &c->chambers[i];
             uint8_t cost = colony_build_cost(i);
-            colony_msg("%s nv.%d%s", colony_chamber_name(i), ch->level,
-                       cost ? "" : " (max)");
-            if (ch->kind == CH_TRASH) do_clean();
+            const char *mx = cost ? "" : " (max)";
+            switch (ch->kind) {
+            case CH_STORAGE:
+                colony_msg("Despensa nv.%d%s: %d comida, %d material.",
+                           ch->level, mx, c->food, c->material);
+                break;
+            case CH_FUNGUS:
+                colony_msg("Jardim nv.%d%s: umid. %d%%, rende ~%d comida/2h.", ch->level, mx,
+                           ch->water, 2 * ch->level + (ch->water > 30 ? 1 : 0) +
+                           (colony_raining() ? 1 : 0));
+                break;
+            case CH_NURSERY:
+                colony_msg("Bercario nv.%d%s: %d ovos, %d larvas, %d pupas (cap %d).",
+                           ch->level, mx, c->eggs, c->larvae, c->pupae, colony_brood_cap());
+                break;
+            case CH_ROYAL:
+                colony_msg("Camara real nv.%d%s: humor %d%%, energia %d%%.",
+                           ch->level, mx, c->queen.mood, c->queen.energy);
+                break;
+            case CH_TRASH:
+                colony_msg("Lixeira nv.%d%s: higiene %d%%. Faxina despachada.",
+                           ch->level, mx, c->hygiene);
+                do_clean();
+                break;
+            default:
+                colony_msg("%s nv.%d%s", colony_chamber_name(i), ch->level, mx);
+                break;
+            }
         }
         break;
     }
@@ -1620,8 +1719,9 @@ void colony_step(int ms)
         if (c->msg_ticks) c->msg_ticks--;
         if (c->flash_ticks) c->flash_ticks--;
 
-        /* câmera segue a primeira operária em atividade externa */
-        {
+        /* câmera: arrasto manual segura o auto-seguir por ~20 s */
+        if (s_cam_hold) { s_cam_hold--; }
+        else {
             int target = -1;
             for (int i = 0; i < c->n_workers; i++) {
                 worker_t *w = &c->workers[i];
@@ -1759,4 +1859,20 @@ void colony_offline(uint32_t sec)
     c->day += sec / 86400u;
     c->egg_progress = 0;
     colony_msg("Voce ficou fora %lu h: a colonia seguiu vivendo!", (unsigned long)h);
+}
+
+/* ===================== controles de sessão (v0.3.0) ======================== */
+void colony_set_forage_cap(int n)
+{
+    s_forage_cap = (uint8_t)(n < 1 ? 1 : (n > 20 ? 20 : n));
+}
+
+int colony_get_forage_cap(void) { return s_forage_cap; }
+
+int colony_spider_hp(void) { return g_col.spider_x >= 0 ? (int)s_spider_hp : -1; }
+
+void colony_cam_pan(int dx)
+{
+    g_col.cam_x = (int16_t)clampi(g_col.cam_x - dx, 0, WORLD_W - VIEW_W);
+    s_cam_hold = 400;          /* ~20 s sem auto-seguir */
 }

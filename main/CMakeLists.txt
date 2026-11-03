@@ -21,6 +21,7 @@ idf_component_register(
         "net/wifi_prov.c"
         "net/weather.c"
         "hw/led.c"
+        "hw/ldr.c"
     INCLUDE_DIRS
         "."
         "storage"
@@ -32,6 +33,7 @@ idf_component_register(
         "hw"
     REQUIRES
         nvs_flash
+        esp_adc
         spi_flash
         esp_timer
         esp_driver_spi

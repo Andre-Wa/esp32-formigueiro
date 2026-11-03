@@ -31,6 +31,9 @@ fuso), **clima real via WiFi** (Open-Meteo) e **LED RGB** de status.
   Markov mantém o clima coerente.
 - **Progresso offline**: ao religar, a colônia avança o tempo ausente (até 48 h)
   com regras simplificadas.
+- **Aranha derrotável**: operárias próximas revidam; vitória rende +25 comida.
+- **Obras confiáveis**: AMPLIAR cobra material na partida e conclui no local;
+  jardim de fungos produz comida passiva (e pode ser umedecido).
 - **LED RGB** de status (ver tabela abaixo).
 - **Save automático** em flash (partição dedicada com ping-pong de 2 setores) +
   NVS para configurações.
@@ -51,6 +54,10 @@ fuso), **clima real via WiFi** (Open-Meteo) e **LED RGB** de status.
 Flash: 4 MB (DIO, 40 MHz). Sem PSRAM — o framebuffer de 150 KB vive no heap.
 
 ## Estrutura do projeto
+
+Documentação completa em `docs/`: **ARQUITETURA.md** (como o software
+funciona), **JOGO.md** (manual de gameplay) e **REDE.md** (WiFi/portal e o
+plano da PWA+BLE).
 
 ```
 formigueiro/
@@ -124,7 +131,8 @@ para o framebuffer (150 KB) e para o TLS do clima (buffers dinâmicos).
 └──────────────────────────────────────┘
 ```
 
-- **Abas** 🏠/🌳 (ou **swipe** lateral na cena): alterna interior ↔ exterior.
+- **Abas** 🏠/: alterna interior ↔ exterior. No interior, swipe lateral
+  troca de vista; **no exterior, arrastar move a câmera**.
 - **Botões rápidos**: DAR (comida), BRIN (brincar), CAÇA (expedição), DORM
   (descansar), OBRA (construção/coleta).
 - **☰ (ou pressão longa na cena)**: menu 3×4 — CARINHO, ALIMENTAR, BRINCAR,
@@ -136,10 +144,11 @@ para o framebuffer (150 KB) e para o TLS do clima (buffers dinâmicos).
   mostra nível (tocar na **Lixeira** despacha faxina); num **recurso** no
   exterior = manda operária coletar; no **chão** = manda batedora explorar.
 
-**Configurações** (☰ → tela de config): VELOCIDADE (x1/x2/x4/pausa), BRILHO,
-WIFI (religa o portal), CIDADE (teclado na tela), CLIMA REAL (liga/desliga),
-HORA (ajuste manual), TOUCH (calibrar), TELA (orientação), SAVE (salvar agora),
-COLONIA (toque duplo = recomeçar colônia) e diário da colônia.
+**Configurações** (☰ → tela de config): VELOCIDADE (x1/x2/x4/pausa), BRILHO
+(botões −/+ e **AUTO** pelo sensor de luz), **EQUIPE FORA** (teto de operárias
+na rua), WIFI (abre/fecha o portal), CIDADE (teclado na tela), CLIMA REAL
+(liga/desliga), HORA (ajuste manual), TOUCH (calibrar), TELA (orientação),
+SAVE (salvar agora), COLONIA (toque duplo = recomeçar colônia) e diário.
 
 ### LED RGB
 

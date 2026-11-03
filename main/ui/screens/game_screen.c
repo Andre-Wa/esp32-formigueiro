@@ -315,6 +315,16 @@ static void handle_view_tap(int x, int y)
         g_col.sel_chamber = 0;
         g_col.sel_worker = 0;
     } else {
+        /* aranha: inspeciona */
+        if (g_col.spider_x >= 0) {
+            int sx = g_col.spider_x - g_col.cam_x;
+            int dx = sx - x, dy = (SY_RES(g_col.spider_y)) - ly;
+            if (dx * dx + dy * dy < 20 * 20) {
+                int hp = colony_spider_hp();
+                if (hp >= 0) colony_msg("Aranha: vida %d%%. Formigas perto dela lutam!", hp);
+                return;
+            }
+        }
         /* recursos: raio generoso p/ dedo */
         for (int i = 0; i < g_col.n_res; i++) {
             const resource_t *r = &g_col.res[i];
@@ -361,10 +371,16 @@ static void game_touch(const touch_evt_t *ev)
         return;
     }
     if (ev->type == TEV_DRAG) {
-        if (!s_drag_consumed && ev->y > VIEW_Y && ev->y < BAR_Y &&
-            (ev->dx >= 24 || ev->dx <= -24)) {
-            s_drag_consumed = true;
-            switch_view(ev->dx < 0 ? 1 : 0);
+        if (ev->y > VIEW_Y && ev->y < BAR_Y) {
+            if (s_view == 1) {
+                /* exterior: arrastar = panoramica da camera (1:1) */
+                colony_cam_pan(ev->dx);
+                ui_dirty_rect(0, VIEW_Y, VIEW_W, VIEW_H);
+                s_drag_consumed = true;
+            } else if (!s_drag_consumed && (ev->dx >= 24 || ev->dx <= -24)) {
+                s_drag_consumed = true;
+                switch_view(1);
+            }
         }
         return;
     }
