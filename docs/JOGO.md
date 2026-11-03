@@ -7,13 +7,13 @@ com rotina própria. Duas cenas: o **interior** (câmaras e túneis) e o
 ## 1. Telas e controles
 
 ```
-┌──────────────────────────────────────┐
+┌───────────────────────────────────────┐
 │ status: hora·dia·clima·comida·material│  toque no ⚙ = Configurações;
-│ cena (interior OU exterior)          │  toque no ⏱ = cicla velocidade
-│ ticker de mensagens                  │
-├──────────────────────────────────────┤
-│ 🏠  │ DAR BRIN CAÇA DORM OBRA │ ☰ OVOS │
-└──────────────────────────────────────┘
+│ cena (interior OU exterior)           │  toque no ⏱ = cicla velocidade
+│ ticker de mensagens                   │
+├───────────────────────────────────────┤
+│ 🏠 │ DAR BRIN CAÇA DORM OBRA │ ☰ OVOS │
+└───────────────────────────────────────┘
 ```
 
 - **🏠 / 🌳**: interior ↔ exterior. No interior, um **arrasto horizontal**

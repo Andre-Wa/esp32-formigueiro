@@ -138,6 +138,7 @@ Detalhes completos do gameplay, LED RGB e economia da colônia: `README.md`.
 | Cores invertidas / azul↔vermelho | Clone com modo diferente: troque o MADCTL em `app_config.h` |
 | Toque desalinhado | Refaça a calibração (Configurações → TOUCH) |
 | `idf.py` não encontrado no terminal | Rode `. ~/esp/esp-idf/export.sh` (Linux/macOS) ou use o prompt "ESP-IDF" do Windows |
+| Build entra em loop "Re-running CMake…" e morre em `manifest 'build.ninja' still dirty after 100 tries` | Estado velho + mtime: `rm -rf build sdkconfig`, confira o relógio (`date`) e rode `idf.py set-target esp32 && idf.py build` (rebuild completo, ~3-5 min). Se repetir: seu ESP-IDF tem um `.git` quebrado (o log mostra `fatal: gitfile não aponta para um repositório válido`) — apague o **arquivo** `.git` dentro da pasta do IDF (ex.: `rm ~/.espressif/v5.5.1/esp-idf/.git`) ou reinstale o IDF pela extensão |
 | Clima nunca atualiza | Cidade não encontrada/geocode falhou — ajuste o nome em Configurações → CIDADE |
 
 ---

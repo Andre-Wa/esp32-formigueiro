@@ -114,7 +114,7 @@
 
 /* ===================== Aplicação ========================================== */
 #define APP_NAME            "Formigueiro"
-#define APP_VERSION         "0.3.0"
+#define APP_VERSION         "0.3.1"
 
 /* Força o fluxo de orientação + calibração de touch em TODO boot (debug). */
 #define DEBUG_CALIB_EVERY_BOOT 0

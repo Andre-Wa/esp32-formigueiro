@@ -1,5 +1,21 @@
 # Changelog — Formigueiro (CYD)
 
+## 0.3.1 — 2026-11-03
+
+**Build (correção de loop de reconfigure do CMake/ninja)**
+- `sdkconfig.defaults` limpo: símbolo atualizado
+  (`CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240`, o antigo
+  `CONFIG_ESP32_DEFAULT_CPU_FREQ_240` estava depreciado), removidos símbolos
+  inexistentes no IDF 5.5 (`HTTPD_MAX_REQ_HDRS`, `LWIP_SNTP_SUPPORT`) e
+  comentários decorados (`# ==== ... ====`) que o kconfgen reescrevia a cada
+  configure — cada reescrita renovava o mtime de `sdkconfig` e podia
+  realimentar o ciclo "Re-running CMake…".
+- Receita contra `ninja: error: manifest 'build.ninja' still dirty after 100
+  tries`: build limpo (`rm -rf build sdkconfig`), relógio do PC conferido
+  (`date`) e, se o log mostrar `fatal: gitfile não aponta para um repositório
+  válido` no IDF, remover o arquivo `.git` quebrado da instalação do ESP-IDF
+  (ou reinstalar) — detalhes em `INSTALACAO.md` §7.
+
 ## 0.3.0 — 2026-11-03
 
 **WiFi/portal**
