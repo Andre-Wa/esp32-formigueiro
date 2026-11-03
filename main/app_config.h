@@ -109,14 +109,14 @@
 
 /* ===================== Aplicação ========================================== */
 #define APP_NAME            "Formigueiro"
-#define APP_VERSION         "1.0.0"
+#define APP_VERSION         "0.2.0"
 
 /* Força o fluxo de orientação + calibração de touch em TODO boot (debug). */
 #define DEBUG_CALIB_EVERY_BOOT 0
 
 /* Prioridades de tarefas */
 #define PRIO_GAME           6               /* sim + render (Core 1) */
-#define PRIO_TOUCH          5               /* amostragem do XPT2046 (Core 1) */
+#define PRIO_TOUCH          7               /* acima do game: amostra mesmo em quadros longos */
 #define PRIO_NET            4               /* WiFi/clima/NTP (Core 0) */
 
 /* Núcleos */

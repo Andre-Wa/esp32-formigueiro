@@ -120,7 +120,6 @@ static void game_task(void *arg)
 {
     int64_t last = esp_timer_get_time() / 1000;
     int64_t boot = last;
-    TickType_t xLastWake = xTaskGetTickCount();
 
     while (true) {
         int64_t now = esp_timer_get_time() / 1000;
@@ -168,7 +167,14 @@ static void game_task(void *arg)
         /* 5) LED de status */
         if ((now / 200) != ((now - elapsed) / 200)) led_update();
 
-        vTaskDelayUntil(&xLastWake, pdMS_TO_TICKS(COLONY_TICK_MS));
+        /* 6) pacing: bloqueia SEMPRE pelo menos 4 ms por quadro.
+         * O redraw completo da cena pode ultrapassar COLONY_TICK_MS; com
+         * vTaskDelayUntil isso não dormiria nunca e a task não cederia a
+         * CPU — matando de fome o touch_task e a IDLE1 (task WDT). */
+        int64_t frame_ms = esp_timer_get_time() / 1000 - now;
+        int32_t sleep_ms = (int32_t)(COLONY_TICK_MS - frame_ms);
+        if (sleep_ms < 4) sleep_ms = 4;
+        vTaskDelay(pdMS_TO_TICKS(sleep_ms));
     }
 }
 
