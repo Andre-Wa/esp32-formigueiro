@@ -47,6 +47,10 @@ static char s_geo_req[25];
 static bool s_sntp_done;
 static int  s_retries;
 static int64_t s_last_weather_ms;
+static int64_t s_net_ready_ms;     /* HTTP/DNS confiável só a partir daqui */
+static int64_t s_wx_retry_ms;      /* retry agendado do clima (backoff) */
+static int64_t s_geo_retry_ms;     /* retry agendado do geocode */
+static uint8_t s_wx_fails, s_geo_fails;
 static esp_netif_t *s_ap_netif;
 
 static int64_t now_ms(void) { return esp_timer_get_time() / 1000; }
@@ -106,6 +110,9 @@ static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
         ESP_LOGI(TAG, "IP: " IPSTR, IP2STR(&ev->ip_info.ip));
         s_retries = 0;
         set_state(WIFI_ONLINE);
+        /* o DNS do DHCP demora alguns segundos p/ ficar utilizável:
+         * consultar antes disso é a causa clássica de getaddrinfo 202 */
+        s_net_ready_ms = now_ms() + 5000;
         s_weather_req = true;
     }
 }
@@ -452,15 +459,14 @@ static void sntp_start(void)
 }
 
 /* ============================ consultas =================================== */
-static void do_geocode(void)
+static bool do_geocode(void)
 {
     char enc[48], url[256];
     url_encode(enc, sizeof(enc), s_geo_req);
     snprintf(url, sizeof(url), GEO_URL_FMT, enc);
     char *json = http_get_fallback(url, 2048);
     if (!json) {
-        toast("Geocoding falhou (sem internet?).");
-        return;
+        return false;              /* rede/DNS ainda não: tenta de novo já já */
     }
     int16_t la, lo;
     if (weather_parse_geocode(json, &la, &lo)) {
@@ -476,19 +482,20 @@ static void do_geocode(void)
         toast("Cidade nao encontrada.");
     }
     free(json);
+    return true;                   /* servidor respondeu: não repete */
 }
 
-static void do_weather(void)
+static bool do_weather(void)
 {
     app_config_t *cfg = appcfg_get();
-    if (!cfg->weather_enabled || !cfg->geo_ok) return;
+    if (!cfg->weather_enabled || !cfg->geo_ok) return true;
     char url[512];
     snprintf(url, sizeof(url), WEATHER_URL_FMT, cfg->lat_x100 / 100.0,
              cfg->lon_x100 / 100.0);
     char *json = http_get_fallback(url, 4096);
     if (!json) {
         ESP_LOGW(TAG, "clima indisponivel — mantendo simulacao");
-        return;
+        return false;
     }
     uint8_t wx, hum, pp;
     int16_t temp;
@@ -501,6 +508,7 @@ static void do_weather(void)
                  weather_name(wx), temp / 10, abs(temp % 10), hum);
     }
     free(json);
+    return true;
 }
 
 /* ============================ tarefa ====================================== */
@@ -545,16 +553,35 @@ static void net_task(void *arg)
 
         if (s_state == WIFI_ONLINE) {
             if (!s_sntp_done) sntp_start();
-            if (s_geo_req[0]) {
-                char g[25];
-                strlcpy(g, s_geo_req, sizeof(g));
-                s_geo_req[0] = 0;
-                do_geocode();
-            }
-            if (s_weather_req || now - s_last_weather_ms > WEATHER_REFRESH_MIN * 60000) {
-                s_weather_req = false;
-                s_last_weather_ms = now;
-                do_weather();
+            if (now >= s_net_ready_ms) {
+                /* geocode com retry próprio (não descarta a cidade na 1ª falha) */
+                if (s_geo_req[0] && now >= s_geo_retry_ms) {
+                    if (do_geocode()) {
+                        s_geo_req[0] = 0;
+                        s_geo_fails = 0;
+                    } else if (++s_geo_fails >= 4) {
+                        s_geo_req[0] = 0;
+                        toast("Cidade nao localizada (sem internet?).");
+                    } else {
+                        s_geo_retry_ms = now + 15000;
+                    }
+                }
+                /* clima: retry com backoff 15s,15s,15s,2min... em vez de 20 min */
+                bool due = s_weather_req ||
+                           (now - s_last_weather_ms > WEATHER_REFRESH_MIN * 60000);
+                if ((due || s_wx_retry_ms) && now >= s_wx_retry_ms) {
+                    s_weather_req = false;
+                    s_wx_retry_ms = 0;
+                    if (do_weather()) {
+                        s_wx_fails = 0;
+                        s_last_weather_ms = now;
+                    } else {
+                        s_wx_fails = (uint8_t)(s_wx_fails + 1);
+                        s_wx_retry_ms = now + (s_wx_fails <= 3 ? 15000 : 120000);
+                        ESP_LOGW(TAG, "clima: retry em %ds (%u/inf)",
+                                 (int)((s_wx_retry_ms - now) / 1000), s_wx_fails);
+                    }
+                }
             }
         } else if (s_state == WIFI_FAILED && appcfg_get()->wifi_ssid[0] &&
                    now - last_ms > 60000) {

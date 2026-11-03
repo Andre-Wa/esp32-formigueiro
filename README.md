@@ -194,3 +194,6 @@ fonte da ordem — o gerador confere se nada está faltando.
   driver LCD SPI+DMA, touch XPT2046 bit-bang e engine de telas).
 - Clima: [Open-Meteo](https://open-meteo.com/) (gratuito, sem chave para uso
   não comercial).
+- Repositório público do projeto:
+  [Andre-Wa/esp32-formigueiro](https://github.com/Andre-Wa/esp32-formigueiro)
+  (futuro host da PWA via GitHub Pages).

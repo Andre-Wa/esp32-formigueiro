@@ -1,5 +1,17 @@
 # Changelog — Formigueiro (CYD)
 
+## 0.3.3 — 2026-11-03
+
+**Clima/geocode confiáveis (corrida com o DNS)**
+- Causa: a 1ª consulta de clima saía ~0,5 s após o IP do DHCP, antes do DNS
+  ficar utilizável (`getaddrinfo() returns 202`); o retry seguinte só vinha
+  20 min depois (`WEATHER_REFRESH_MIN`) — daí o "clima falha às vezes".
+- Agora: consultas HTTP só começam **5 s após o GOT_IP** (`s_net_ready_ms`) e,
+  em falha, o clima repete com **backoff 15 s → 15 s → 15 s → 2 min** até
+  conseguir; o ciclo de 20 min só conta a partir do primeiro sucesso.
+- Geocode da cidade ganhou retry próprio (4 tentativas, 15 s entre elas) —
+  antes a cidade era descartada na primeira falha de DNS.
+
 ## 0.3.2 — 2026-11-03
 
 - **Credenciais do portal na tela**: enquanto o portal WiFi está aberto, a tela

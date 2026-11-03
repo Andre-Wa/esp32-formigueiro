@@ -56,6 +56,21 @@ Endpoints do portal: `GET /` (HTML), `GET /status` (JSON de estado),
 Objetivo: abrir um app web no celular/PC que mostra e controla o formigueiro
 **sem depender do WiFi da placa** (BLE) e, quando houver WiFi, também pela rede.
 
+### 3.0 Hospedagem da PWA: site externo (decidido)
+
+A PWA será **100% estática** e hospedada fora da placa — hoje o plano é o
+GitHub Pages do repositório público
+[Andre-Wa/esp32-formigueiro](https://github.com/Andre-Wa/esp32-formigueiro)
+(pasta `pwa/`, branch `gh-pages` ou Pages via `/docs`). A placa não serve
+nenhum byte do app: custo zero de flash/RAM.
+
+**Consequência técnica importante**: Pages é servido em **HTTPS**, e
+navegadores bloqueiam `fetch()` de página HTTPS para `http://IP-da-placa`
+(mixed content). Portanto, com a PWA hospedada fora, o transporte oficial é
+**Web Bluetooth (BLE GATT)** — que não sofre essa restrição. O fallback HTTP
+na LAN só vale se a PWA for servida em `http://` (ex.: portal da própria
+placa no modo AP, ou `python3 -m http.server` na rede local).
+
 ### 3.1 Transporte BLE (ESP32, NimBLE)
 
 - Perfil GATT único, serviço `4f524d49-4755-4952-4f2d-XXXXXXXXXXXX`:
