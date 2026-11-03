@@ -138,7 +138,7 @@ Detalhes completos do gameplay, LED RGB e economia da colônia: `README.md`.
 | Cores invertidas / azul↔vermelho | Clone com modo diferente: troque o MADCTL em `app_config.h` |
 | Toque desalinhado | Refaça a calibração (Configurações → TOUCH) |
 | `idf.py` não encontrado no terminal | Rode `. ~/esp/esp-idf/export.sh` (Linux/macOS) ou use o prompt "ESP-IDF" do Windows |
-| Build entra em loop "Re-running CMake…" e morre em `manifest 'build.ninja' still dirty after 100 tries` | Estado velho + mtime: `rm -rf build sdkconfig`, confira o relógio (`date`) e rode `idf.py set-target esp32 && idf.py build` (rebuild completo, ~3-5 min). Se repetir: seu ESP-IDF tem um `.git` quebrado (o log mostra `fatal: gitfile não aponta para um repositório válido`) — apague o **arquivo** `.git` dentro da pasta do IDF (ex.: `rm ~/.espressif/v5.5.1/esp-idf/.git`) ou reinstale o IDF pela extensão |
+| Build entra em loop "Re-running CMake…" e morre em `manifest 'build.ninja' still dirty after 100 tries` | O passo de **auto-reconfigure do ninja** não está convergindo no seu ambiente. Solução definitiva: `idf.py -DCMAKE_SUPPRESS_REGENERATION=ON reconfigure && idf.py build` (a opção fica gravada no `CMakeCache.txt`; a partir daí, **quando mudar CMakeLists/sdkconfig.defaults**, rode `idf.py reconfigure` manualmente antes do build). Complementos: `rm -rf build sdkconfig` p/ estado velho; confira `date`; e se o log mostrar `fatal: gitfile não aponta para um repositório válido`, apague os gitfiles pendurados do IDF (`rm ~/.espressif/v5.5.1/esp-idf/.git ~/.espressif/v5.5.1/esp-idf/components/openthread/openthread/.git`) — o IDF não precisa de git para compilar |
 | Clima nunca atualiza | Cidade não encontrada/geocode falhou — ajuste o nome em Configurações → CIDADE |
 
 ---
